@@ -10,7 +10,7 @@ Monthly model monitoring for BNPL customers scored at `OD=6`. The report evaluat
 
 ## Aging logic
 
-Every run reads all historical rows whose score date has aged 25 days. For example, an August 1 run includes score dates through July 7 because those outcomes are observable on August 1. Daily AUC uses every aged score date. Monthly AUC, customer count, event count, and event rate are grouped by score month; the latest month is marked partial when only part of that month has aged.
+Every run reads all historical rows whose score date has aged 25 days.
 
 ## Local setup
 
