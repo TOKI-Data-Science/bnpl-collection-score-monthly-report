@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: pip
@@ -39,10 +39,10 @@ jobs:
       POWER_AUTOMATE_URL: ${{ secrets.POWER_AUTOMATE_URL }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: pip
@@ -58,7 +58,7 @@ jobs:
 
       - name: Upload report artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: bnpl-collection-score-${{ github.run_number }}
           path: output/bnpl_collection_score_v1.html
