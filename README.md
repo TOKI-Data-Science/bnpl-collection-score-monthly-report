@@ -74,7 +74,7 @@ The confirmed model direction is `HIGH_SCORE_IS_RISK=false`: larger collection s
 
 The workflow in `.github/workflows/monthly-report.yml` runs automatically at `00:00 UTC` on the first day of each month, which is `08:00` in Ulaanbaatar. GitHub schedules run from the default branch and can be delayed during periods of high Actions load.
 
-The default workflow uses a GitHub-hosted Ubuntu runner. It must be able to reach `DWH_DSN`. If the DWH is only available inside the company network, install a GitHub self-hosted runner on an approved internal machine and change both `runs-on: ubuntu-latest` values to the runner's labels, for example `runs-on: self-hosted`.
+The test job uses a GitHub-hosted runner. The report job uses a Windows X64 self-hosted runner because the DWH is available only inside the company network. Register an approved internal machine under **Settings > Actions > Runners** and configure the runner as a Windows service so monthly schedules work while nobody is logged in. The machine must remain powered on and connected to the Unitel network at the scheduled time.
 
 ## Outlook delivery with Power Automate
 
