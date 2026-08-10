@@ -43,7 +43,7 @@ def main() -> None:
         return
     flow_url = os.getenv("POWER_AUTOMATE_URL")
     if not flow_url:
-        raise RuntimeError("Missing POWER_AUTOMATE_URL GitLab CI/CD variable")
+        raise RuntimeError("Missing POWER_AUTOMATE_URL environment variable")
     send_report(args.report, flow_url)
     print("Report sent to Power Automate")
 

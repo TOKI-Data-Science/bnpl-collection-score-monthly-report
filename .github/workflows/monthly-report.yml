@@ -29,7 +29,7 @@ jobs:
 
   monthly-report:
     needs: test
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: [self-hosted, Linux, X64]
     environment: production
     env:
       DWH_USER: ${{ secrets.DWH_USER }}
@@ -38,23 +38,19 @@ jobs:
       HIGH_SCORE_IS_RISK: "false"
       POWER_AUTOMATE_URL: ${{ secrets.POWER_AUTOMATE_URL }}
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v5
+      - name: Create report output directory
+        run: mkdir -p output
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-          cache: pip
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Generate report
-        run: python report.py --output output/bnpl_collection_score_v1.html
-
-      - name: Send report to Power Automate
-        run: python send_to_power_automate.py output/bnpl_collection_score_v1.html
+      - name: Generate and send report
+        run: |
+          docker run --rm \
+            --env DWH_USER \
+            --env DWH_PASSWORD \
+            --env DWH_DSN \
+            --env HIGH_SCORE_IS_RISK \
+            --env POWER_AUTOMATE_URL \
+            --volume "${{ github.workspace }}/output:/app/output" \
+            collection-score-report:latest
 
       - name: Upload report artifact
         if: always()

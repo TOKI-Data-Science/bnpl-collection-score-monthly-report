@@ -65,16 +65,34 @@ python report.py --input-csv sample.csv --as-of 2026-08-01
 
 The confirmed model direction is `HIGH_SCORE_IS_RISK=false`: larger collection scores indicate safer customers. The AUC calculation reverses the score so the positive class remains `overdue_days >= 31`.
 
-## GitHub deployment
+## Production deployment
 
-1. Push this repository to GitHub.
-2. Open **Settings > Environments**, create an environment named `production`, and add environment secrets named `DWH_USER`, `DWH_PASSWORD`, `DWH_DSN`, and `POWER_AUTOMATE_URL`.
-3. Open **Actions**, select **BNPL Collection Score Report**, and choose **Run workflow** to test it manually.
-4. Download the generated report from the workflow run's **Artifacts** section if needed. Artifacts are retained for 90 days.
+Production follows the TOKI project-template pattern: Git tags build a Docker image on the production server, and the scheduled workflow runs that image as a batch job.
 
-The workflow in `.github/workflows/monthly-report.yml` runs automatically at `00:00 UTC` on the first day of each month, which is `08:00` in Ulaanbaatar. GitHub schedules run from the default branch and can be delayed during periods of high Actions load.
+1. Install Docker and a GitHub Actions self-hosted runner on an approved Linux X64 server that can reach the DWH.
+2. Configure the runner as a service and give it the `self-hosted`, `Linux`, and `X64` labels.
+3. Open **Settings > Environments**, create an environment named `production`, and add secrets named `DWH_USER`, `DWH_PASSWORD`, `DWH_DSN`, and `POWER_AUTOMATE_URL`.
+4. Push a release tag to build `collection-score-report:latest` on that server:
 
-The test job uses a GitHub-hosted runner. The report job uses a Windows X64 self-hosted runner because the DWH is available only inside the company network. Register an approved internal machine under **Settings > Actions > Runners** and configure the runner as a Windows service so monthly schedules work while nobody is logged in. The machine must remain powered on and connected to the Unitel network at the scheduled time.
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+5. Open **Actions**, select **BNPL Collection Score Report**, and choose **Run workflow** to test the production job manually.
+
+The build workflow runs tests, builds the versioned image and `collection-score-report:latest`, and verifies its dry-run entrypoint. The image uses `python-oracledb` thin mode, so Oracle Instant Client is not required.
+
+The monthly workflow runs automatically at `00:00 UTC` on the first day of each month, which is `08:00` in Ulaanbaatar. It mounts `output/` from the runner, generates the report, sends it to Power Automate, and uploads the HTML artifact for 90 days. The server must remain powered on and connected to the Unitel network.
+
+To run the same image directly on the production server:
+
+```bash
+docker run --rm \
+	--env-file "$HOME/envs/collection-score-report.env" \
+	--volume "$PWD/output:/app/output" \
+	collection-score-report:latest
+```
 
 ## Outlook delivery with Power Automate
 
