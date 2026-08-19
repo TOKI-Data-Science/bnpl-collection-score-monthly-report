@@ -41,7 +41,6 @@ DWH_DSN=hostname:1521/service_name
 HIGH_SCORE_IS_RISK=false
 ```
 
-The `.env` file is ignored by Git. Never commit credentials. `python-oracledb` uses thin mode by default, so Oracle Instant Client is normally unnecessary.
 
 Check the aging cutoff without connecting to DWH:
 
@@ -61,38 +60,116 @@ For offline development, provide a CSV containing at least `user_id`, `base_date
 python report.py --input-csv sample.csv --as-of 2026-08-01
 ```
 
-## Score direction
-
-The confirmed model direction is `HIGH_SCORE_IS_RISK=false`: larger collection scores indicate safer customers. The AUC calculation reverses the score so the positive class remains `overdue_days >= 31`.
-
 ## Production deployment
 
 Production follows the TOKI project-template pattern: Git tags build a Docker image on the production server, and the scheduled workflow runs that image as a batch job.
 
-1. Install Docker and a GitHub Actions self-hosted runner on an approved Linux X64 server that can reach the DWH.
-2. Configure the runner as a service and give it the `self-hosted`, `Linux`, and `X64` labels.
-3. Open **Settings > Environments**, create an environment named `production`, and add secrets named `DWH_USER`, `DWH_PASSWORD`, `DWH_DSN`, and `POWER_AUTOMATE_URL`.
-4. Push a release tag to build `collection-score-report:latest` on that server:
+### One-time server setup
+
+These steps are done once per server. Skip if the server already has Docker and an Actions runner for your GitHub organization.
+
+**1. Install Docker on the Linux production server**
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+sudo apt-get update
+sudo apt-get install -y docker.io
+sudo systemctl enable --now docker
+sudo usermod -aG docker "$USER"
+# Log out and back in for the group change to take effect
+docker run --rm hello-world   # verify
 ```
 
-5. Open **Actions**, select **BNPL Collection Score Report**, and choose **Run workflow** to test the production job manually.
+**2. Register a GitHub Actions self-hosted runner**
 
-The build workflow runs tests, builds the versioned image and `collection-score-report:latest`, and verifies its dry-run entrypoint. The image uses `python-oracledb` thin mode, so Oracle Instant Client is not required.
+Create a dedicated directory for each project to keep runners isolated:
 
-The monthly workflow runs automatically at `00:00 UTC` on the first day of each month, which is `08:00` in Ulaanbaatar. It mounts `output/` from the runner, generates the report, sends it to Power Automate, and uploads the HTML artifact for 90 days. The server must remain powered on and connected to the Unitel network.
+```bash
+mkdir -p ~/actions-runner-PROJECTNAME
+cd ~/actions-runner-PROJECTNAME
 
-To run the same image directly on the production server:
+curl -o actions-runner-linux-x64-2.336.0.tar.gz -L \
+  https://github.com/actions/runner/releases/download/v2.336.0/actions-runner-linux-x64-2.336.0.tar.gz
+
+tar xzf actions-runner-linux-x64-2.336.0.tar.gz
+```
+
+On GitHub, open **Repository → Settings → Actions → Runners → New self-hosted runner → Linux → x64** and copy the registration token. Run on the server:
+
+```bash
+./config.sh \
+  --url https://github.com/ORG/REPO \
+  --token PASTE_TOKEN_HERE \
+  --name SERVERNAME-PROJECTNAME \
+  --work _work \
+  --unattended
+```
+
+Install as a persistent service so it survives reboots and SSH disconnects:
+
+```bash
+sudo ./svc.sh install ubuntu
+sudo ./svc.sh start
+sudo ./svc.sh status
+```
+
+Verify it appears as **Idle** with labels `self-hosted`, `Linux`, `X64` under **Settings → Actions → Runners**.
+
+> **Note:** Each runner directory is registered to one repository. If the server already has a runner for another organization (check `cat ~/actions-runner/.runner`), always create a new directory — never reconfigure the existing one.
+
+### One-time GitHub setup
+
+**3. Create the production environment and secrets**
+
+Open **Settings → Environments → New environment**, name it `production`, then add the required secrets. For this project:
+
+| Secret | Description |
+|---|---|
+| `DWH_USER` | Oracle username |
+| `DWH_PASSWORD` | Oracle password |
+| `DWH_DSN` | Oracle DSN (`host:port/service`) |
+| `POWER_AUTOMATE_URL` | Power Automate HTTP trigger URL (optional) |
+
+`POWER_AUTOMATE_URL` is optional. When omitted, email delivery is skipped and the report is available as a GitHub Actions artifact only. Add it later to enable email delivery.
+
+### Deploy a new version
+
+Push a release tag to trigger the build workflow:
+
+```bash
+git tag v0.x.x
+git push origin v0.x.x
+```
+
+The **Build Production Image** workflow runs tests, builds the Docker image on `bhtg`, tags it as both `vX.X.X` and `latest`, and verifies the production entrypoint. No manual steps are needed on the server.
+
+### Run the report manually
+
+Open **Actions → BNPL Collection Score Report → Run workflow**. Use this after deploying a new version to verify end-to-end before the next scheduled run.
+
+### Scheduled execution
+
+The monthly workflow runs automatically at `00:00 UTC` on the first day of each month, which is `08:00` in Ulaanbaatar. It mounts `output/` from the runner, generates the report, and uploads the HTML artifact for 90 days. The server must remain powered on and connected to the Unitel network.
+
+### Download the report
+
+Open **Actions → BNPL Collection Score Report → click the latest green run → Artifacts → `bnpl-collection-score-N`**. Extract the zip and open `bnpl_collection_score_v1.html` in any browser.
+
+### Run the image directly on the server
 
 ```bash
 docker run --rm \
-	--env-file "$HOME/envs/collection-score-report.env" \
-	--volume "$PWD/output:/app/output" \
-	collection-score-report:latest
+  --env-file "$HOME/envs/collection-score-report.env" \
+  --volume "$PWD/output:/app/output" \
+  collection-score-report:latest
 ```
+
+### Applying this pattern to a new project
+
+1. Copy `.github/workflows/build-image.yml` and `.github/workflows/monthly-report.yml` into the new repository.
+2. Replace `collection-score-report` with the new image name throughout both files.
+3. Replace `script.py` with the new project's entrypoint.
+4. Follow **One-time server setup** and **One-time GitHub setup** above.
+5. Push a tag to deploy.
 
 ## Outlook delivery with Power Automate
 
