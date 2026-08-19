@@ -19,7 +19,8 @@ def main() -> None:
         return
 
     run(["report.py", "--output", str(REPORT_OUTPUT)])
-    run(["send_to_power_automate.py", str(REPORT_OUTPUT)])
+    if os.getenv("POWER_AUTOMATE_URL"):
+        run(["send_to_power_automate.py", str(REPORT_OUTPUT)])
 
 
 if __name__ == "__main__":
